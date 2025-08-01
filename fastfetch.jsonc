@@ -10,9 +10,12 @@
       "binaryPrefix": "jedec"
     },
     "separator": " 󰑃  ",
-    "constants": ["──────────"]
+    "constants": [
+      "────────────────────" // {$1}, used in custom module
+    ]
   },
   "modules": [
+    // DISTRO SECTION
     {
       "type": "os",
       "key": " OS",
@@ -35,8 +38,10 @@
     },
     {
       "type": "custom",
-      "format": "├{$1}{$1}"
+      "format": "├{$1}",
+      "outputColor": "38;5;244"
     },
+    // THEME SECTION
     {
       "type": "wmtheme",
       "key": "󰉼 THEME",
@@ -79,8 +84,10 @@
     },
     {
       "type": "custom",
-      "format": "├{$1}{$1}"
+      "format": "├{$1}",
+      "outputColor": "38;5;244"
     },
+    // SYSTEM SECTION
     {
       "type": "host",
       "key": "󰌢 SYSTEM",
@@ -144,17 +151,20 @@
     },
     {
       "type": "custom",
-      "format": "├{$1}{$1}"
+      "format": "├{$1}",
+      "outputColor": "38;5;244"
     },
+    // AUDIO SECTION
     {
       "type": "sound",
       "key": " AUDIO",
       "keyColor": "magenta"
     },
     "break",
+    // COLOR BAR
     {
       "type": "custom",
-      "format": "\u001b[90m  \u001b[31m  \u001b[32m  \u001b[33m  \u001b[34m  \u001b[35m  \u001b[36m  \u001b[37m  \u001b[38m  \u001b[39m  \u001b[39m    \u001b[38m  \u001b[37m  \u001b[36m  \u001b[35m  \u001b[34m  \u001b[33m  \u001b[32m  \u001b[31m  \u001b[90m "
+      "format": "\u001b[90m  \u001b[31m  \u001b[32m  \u001b[33m  \u001b[34m  \u001b[35m  \u001b[36m  \u001b[37m  \u001b[38m  \u001b[39m  \u001b[39m    \u001b[38m  \u001b[37m  \u001b[36m  \u001b[35m  \u001b[34m  \u001b[33m  \u001b[32m  \u001b[31m  \u001b[90m"
     }
   ]
 }
