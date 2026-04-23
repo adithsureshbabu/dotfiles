@@ -25,8 +25,8 @@
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
 
     <!-- Neo-brutalist design system (plug-and-play bundle) -->
-    <link rel="stylesheet" href="/neo-brutalist/brutalist.css" />
-    <link rel="stylesheet" href="/neo-brutalist/brutalist-icons.css" />
+    <link rel="stylesheet" href="https://adithsureshbabu.github.io/neo-brutalist/brutalist.css" />
+    <link rel="stylesheet" href="https://adithsureshbabu.github.io/neo-brutalist/brutalist-icons.css" />
 
     <!-- Page-specific layout (self-contained in index.html) -->
     <style>
@@ -40,8 +40,7 @@
         min-height: 100%;
       }
 
-      /* Defensive: hidden attribute must win over component display rules.
-       Carve out .nb-loader because the NB system uses [hidden] for its fade-out. */
+      /* [hidden] wins over NB display rules, except .nb-loader which uses its own fade-out. */
       [hidden]:not(.nb-loader) {
         display: none !important;
       }
@@ -179,13 +178,26 @@
         user-select: none;
       }
 
-      /* Rate-limit banner */
+      /* Full-width alert. .nb-badge is content-box and shadow-less (for inline
+         pills), so we restyle locally to match the adjacent nb-cards. */
       .ratelimit-banner {
+        box-sizing: border-box;
         display: flex;
         justify-content: center;
+        align-items: center;
         width: 100%;
+        padding: 12px 16px;
         margin-bottom: 16px;
+        background: #ffb4b4;
+        color: var(--nb-ink);
+        font-family: var(--nb-font-mono);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
         text-align: center;
+        border: var(--nb-border-sm);
+        box-shadow: 5px 5px 0 var(--nb-ink);
       }
 
       /* File explorer */
@@ -240,6 +252,18 @@
         text-align: right;
         color: var(--nb-ink-muted);
         font-size: 12px;
+      }
+      /* Repos mode cells */
+      .file-table td.cell-desc {
+        padding: 12px 16px;
+        color: var(--nb-ink);
+        font-size: 13px;
+      }
+      .file-table td.cell-date {
+        padding: 12px 16px;
+        color: var(--nb-ink-muted);
+        font-size: 12px;
+        white-space: nowrap;
       }
       .file-table td.cell-empty {
         padding: 16px;
@@ -305,8 +329,7 @@
         }
       }
 
-      /* Local safety net: still respect reduced-motion even if the NB bundle's
-         loader animation isn't wrapped in the same media query. */
+      /* Belt-and-braces for prefers-reduced-motion if the NB bundle doesn't honor it. */
       @media (prefers-reduced-motion: reduce) {
         .nb-loader-block {
           animation: none;
@@ -358,7 +381,7 @@
           </ol>
         </nav>
 
-        <div id="ratelimitBanner" class="ratelimit-banner nb-badge nb-badge--fail" role="alert" hidden></div>
+        <div id="ratelimitBanner" class="ratelimit-banner" role="alert" hidden></div>
 
         <section class="explorer nb-card">
           <table class="file-table">
@@ -396,33 +419,70 @@
     </main>
 
     <script type="module">
-      // Resolve which { owner, repo } to render. Precedence:
-      //   1. ?o=&r= query params — explicit override, works for any deployment.
-      //   2. github.io subdomain + first path segment — lets this file auto-target
-      //      the repo it's deployed as (e.g. johndoe.github.io/my-awesome-repo).
-      //   3. Demo fallback — keeps the file usable as a static sample when opened
-      //      without any of the above context.
-      const resolveTarget = () => {
+      // Resolve { owner, repo, basePath } from the URL. Precedence: ?o=&r=&p=
+      // override → github.io path (probed to disambiguate project-page repo vs
+      // user-pages subfolder) → bare github.io root → demo fallback.
+      // Probe /repos/:owner/:repo for has_pages. Inconclusive on rate-limit/network errors.
+      const probeHasPages = async (owner, repo) => {
+        try {
+          const res = await fetch(
+            `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+            { headers: { Accept: "application/vnd.github+json" } }
+          );
+          if (res.status === 404) return { ok: true, hasPages: false };
+          if (res.ok) return { ok: true, hasPages: Boolean((await res.json()).has_pages) };
+          return { ok: false };
+        } catch {
+          return { ok: false };
+        }
+      };
+
+      const resolveTarget = async () => {
         const url = new URL(window.location.href);
         const qOwner = url.searchParams.get("o");
         const qRepo = url.searchParams.get("r");
-        if (qOwner && qRepo) return { owner: qOwner, repo: qRepo };
+        const qPath = url.searchParams.get("p") || "";
+        if (qOwner && qRepo) return { owner: qOwner, repo: qRepo, basePath: qPath };
 
         const host = url.hostname;
-        const firstSeg = url.pathname.split("/").filter(Boolean)[0];
-        if (host.endsWith("github.io") && firstSeg) {
-          return { owner: host.split(".")[0], repo: firstSeg };
+        if (!host.endsWith("github.io")) {
+          return { owner: "freeCodeCamp", repo: "freeCodeCamp", basePath: "" };
         }
-        return { owner: "freeCodeCamp", repo: "freeCodeCamp" };
+
+        const owner = host.split(".")[0];
+        // Strip trailing /index.html so segs only contains directory parts.
+        const pathname = url.pathname.replace(/\/index\.html$/i, "/");
+        const segs = pathname.split("/").filter(Boolean);
+
+        if (segs.length === 0) return { owner, repo: `${owner}.github.io`, basePath: "" };
+
+        const firstSeg = segs[0];
+        const probe = await probeHasPages(owner, firstSeg);
+        if (probe.ok && probe.hasPages) {
+          return { owner, repo: firstSeg, basePath: segs.slice(1).join("/") };
+        }
+        if (probe.ok) {
+          return { owner, repo: `${owner}.github.io`, basePath: segs.join("/") };
+        }
+        // Probe inconclusive (rate-limit, network blip) — fall back to the old
+        // heuristic so the page still loads something sensible.
+        return { owner, repo: firstSeg, basePath: "" };
       };
 
-      const TARGET = resolveTarget();
-      document.title = `${TARGET.owner}/${TARGET.repo}`;
+      const TARGET = await resolveTarget();
+      // "repos" mode lists the user's public repos with a homepage set;
+      // triggered when we're aimed at a user-pages repo's root. Everything
+      // else stays in "files" mode (the repo file-tree browser).
+      const MODE = TARGET.basePath === "" && TARGET.repo === `${TARGET.owner}.github.io` ? "repos" : "files";
+      document.title =
+        MODE === "repos"
+          ? "Index of /"
+          : TARGET.basePath
+            ? `${TARGET.owner}/${TARGET.repo}/${TARGET.basePath}`
+            : `${TARGET.owner}/${TARGET.repo}`;
 
       const $ = id => document.getElementById(id);
-      // Browsers return location.hash already percent-encoded, but state.dirIndex is
-      // keyed on the raw paths from GitHub. Decode so folders with spaces/#/? survive
-      // back-button round-trips instead of snapping to root.
+      // Decode location.hash so folder names with spaces/#/? match dirIndex keys.
       const currentHashPath = () => {
         try {
           return decodeURIComponent(window.location.hash.replace(/^#/, ""));
@@ -456,7 +516,9 @@
         repo: null,
         tree: null,
         dirIndex: null,
-        currentPath: ""
+        currentPath: "",
+        repos: null, // populated in "repos" mode
+        lastMods: null // { repoName: iso } in "repos" mode
       };
 
       // Typed errors let handleError switch on `instanceof` and keep stack traces.
@@ -487,8 +549,7 @@
         }
       }
 
-      // Cancels any prior in-flight boot/revalidate so a retry, popstate, or
-      // hashchange can't race a stale response over the fresh render.
+      // Aborts any in-flight fetch before starting a new one — prevents stale responses racing the render.
       let currentAbort = null;
       const newAbortController = () => {
         if (currentAbort) currentAbort.abort();
@@ -501,8 +562,11 @@
 
       const treePath = branch => repoApiPath(`/git/trees/${encodeURIComponent(branch)}?recursive=1`);
 
-      // Builds a github.com blob URL for a file. Encodes each segment separately so
-      // "/" stays as a path separator while "#", "?", etc. inside names are escaped.
+      const userReposPath = () => `/users/${encodeURIComponent(TARGET.owner)}/repos?per_page=100`;
+      const branchPath = (owner, repo, branch) =>
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/${encodeURIComponent(branch)}`;
+
+      // Encode path segments individually so "/" stays a separator but "#"/"?" escape.
       const blobUrl = entryPath => {
         const branch = state.repo?.default_branch || "main";
         const enc = str => str.split("/").map(encodeURIComponent).join("/");
@@ -511,6 +575,92 @@
         return `https://github.com/${owner}/${repo}/blob/${enc(branch)}/${enc(entryPath)}`;
       };
 
+      // Pages-exclusive MIMEs (HTML, images, media). Only used when PAGES_BASE set.
+      const PAGES_RENDERABLE = new Set([
+        "html",
+        "htm",
+        "xhtml",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "avif",
+        "bmp",
+        "ico",
+        "svg",
+        "pdf",
+        "mp3",
+        "wav",
+        "ogg",
+        "mp4",
+        "webm"
+      ]);
+
+      // raw.githubusercontent serves non-images as text/plain — inline text
+      // rendering that works for foreign repos and unusual extensions (.toml,
+      // .jsonc, .yaml) that Pages would force-download as octet-stream.
+      const RAW_RENDERABLE = new Set([
+        "txt",
+        "log",
+        "csv",
+        "tsv",
+        "css",
+        "js",
+        "mjs",
+        "json",
+        "jsonc",
+        "xml",
+        "yaml",
+        "yml",
+        "toml",
+        "ini",
+        "conf",
+        "env"
+      ]);
+
+      // Pages base URL when the app is served from TARGET's own deployment;
+      // every repo file is then live at `${PAGES_BASE}<path>` with correct MIME.
+      // Null for foreign repos (?o=&r=) or local dev.
+      const PAGES_BASE = (() => {
+        const url = new URL(window.location.href);
+        if (!url.hostname.endsWith("github.io")) return null;
+        if (url.hostname.split(".")[0] !== TARGET.owner) return null;
+        if (TARGET.repo === `${TARGET.owner}.github.io`) return `${url.origin}/`;
+        // Project pages only confirmed when this page itself lives under /<repo>/.
+        const firstSeg = url.pathname.split("/").filter(Boolean)[0];
+        if (firstSeg && firstSeg === TARGET.repo) {
+          return `${url.origin}/${encodeURIComponent(firstSeg)}/`;
+        }
+        return null;
+      })();
+
+      const pagesUrl = entryPath => {
+        const enc = str => str.split("/").map(encodeURIComponent).join("/");
+        return `${PAGES_BASE}${enc(entryPath)}`;
+      };
+
+      const rawUrl = entryPath => {
+        const branch = state.repo?.default_branch || "main";
+        const enc = str => str.split("/").map(encodeURIComponent).join("/");
+        const owner = encodeURIComponent(TARGET.owner);
+        const repo = encodeURIComponent(TARGET.repo);
+        return `https://raw.githubusercontent.com/${owner}/${repo}/${enc(branch)}/${enc(entryPath)}`;
+      };
+
+      // Dispatch: text → raw (text/plain, works for foreign repos), HTML/images/
+      // media → Pages (needs own deployment), else → GitHub blob. Entry paths
+      // are basePath-relative; re-absolutize before handing to URL builders.
+      const fileUrl = entry => {
+        const fullPath = TARGET.basePath ? `${TARGET.basePath}/${entry.path}` : entry.path;
+        const dot = entry.name.lastIndexOf(".");
+        const ext = dot === -1 ? "" : entry.name.slice(dot + 1).toLowerCase();
+        if (RAW_RENDERABLE.has(ext)) return rawUrl(fullPath);
+        if (PAGES_BASE && PAGES_RENDERABLE.has(ext)) return pagesUrl(fullPath);
+        return blobUrl(fullPath);
+      };
+
+      // GitHub API wrapper: ETag conditional, typed errors for rate-limit / 404.
       const githubFetch = async (path, { etag, signal } = {}) => {
         const headers = { Accept: "application/vnd.github+json" };
         if (etag) headers["If-None-Match"] = etag;
@@ -522,8 +672,7 @@
           if (remaining === "0") {
             const rawReset = res.headers.get("X-RateLimit-Reset");
             const resetEpoch = rawReset ? parseInt(rawReset, 10) : 0;
-            // A missing/zero reset header means we can't place the reset time — surface as
-            // null so the UI can show "shortly" instead of a bogus 1970-derived clock.
+            // Missing reset header → null so UI shows "shortly" not a 1970 clock.
             const resetAt = resetEpoch > 0 ? new Date(resetEpoch * 1000) : null;
             throw new RateLimitError(resetAt);
           }
@@ -534,8 +683,7 @@
         return { status: 200, body: await res.json(), etag: res.headers.get("ETag") };
       };
 
-      // View visibility table keyed by logical app state; the loader uses the
-      // NB fade-out so its hidden attribute is still honored via the CSS carve-out.
+      // Visibility matrix per logical app state; loader uses the NB fade-out.
       const VIEWS = {
         loader: { loader: false, main: true, error: true, busy: "true" },
         main: { loader: true, main: false, error: true, busy: "false" },
@@ -555,8 +703,8 @@
         dom.errorTitle.textContent = title;
         dom.errorMessage.textContent = message;
         dom.errorRetry.hidden = !showRetry;
-        // tabindex="-1" is set statically on the h2 so it's programmatically focusable
-        // without entering the tab order; moving focus here lands SR users on the alert.
+        // h2 has tabindex="-1" so focus lands SR users on the alert without
+        // adding it to the tab order.
         dom.errorTitle.focus();
       };
 
@@ -571,6 +719,15 @@
       };
 
       const formatHHMM = (d = new Date()) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      // ISO → "YYYY-MM-DD HH:MM" (local), matching the existing root index format.
+      const formatDate = iso => {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        if (isNaN(d)) return "—";
+        const p = n => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      };
 
       const ICON_BY_EXT = {
         md: "ph-file-text",
@@ -593,11 +750,10 @@
         pdf: "ph-file-pdf"
       };
 
-      // Folder icons use the Phosphor "fill" weight so they read as solid shapes
-      // against the outlined file glyphs; everything else stays on "regular".
+      // Folders use Phosphor "fill" weight for a solid shape vs outlined files.
       const iconFor = (name, type) => {
         if (type === "dir") return { cls: "ph-folder", weight: "ph-fill", isFolder: true };
-        // Dotfiles (e.g. .zshrc, .gitignore) have no real extension; render them as config glyphs.
+        // Dotfiles have no real extension — render them as config glyphs.
         if (name.startsWith(".")) return { cls: "ph-gear", weight: "ph", isFolder: false };
         const dot = name.lastIndexOf(".");
         const ext = dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
@@ -606,11 +762,10 @@
 
       const CACHE_PREFIX = "cupuacu:";
       const CACHE_VERSION = "v1";
-      const CACHE_KEY = `${CACHE_PREFIX}${CACHE_VERSION}:${TARGET.owner}/${TARGET.repo}`;
+      const CACHE_KEY = `${CACHE_PREFIX}${CACHE_VERSION}:${TARGET.owner}/${TARGET.repo}:${MODE}`;
       const CACHE_MAX_BYTES = 3_000_000;
 
-      // Drop any older-version cache entries we planted in previous deploys so they
-      // don't sit in localStorage forever after a CACHE_VERSION bump.
+      // Evict prior-version cache entries left behind after a CACHE_VERSION bump.
       const sweepStaleCache = () => {
         const currentPrefix = `${CACHE_PREFIX}${CACHE_VERSION}:`;
         try {
@@ -631,7 +786,10 @@
           const raw = localStorage.getItem(CACHE_KEY);
           if (!raw) return null;
           const parsed = JSON.parse(raw);
-          if (!parsed || !parsed.repo || !parsed.tree) return null;
+          if (!parsed) return null;
+          const validForMode =
+            MODE === "repos" ? Array.isArray(parsed.repos) && parsed.repo && parsed.tree : parsed.repo && parsed.tree;
+          if (!validForMode) return null;
           return parsed;
         } catch (err) {
           // Corrupted entry: drop it so the next write starts clean.
@@ -675,13 +833,20 @@
         dom.announcer.textContent = `Showing ${count} items in ${label}`;
       };
 
-      const buildDirIndex = tree => {
+      // Group tree nodes by parent path into a Map. When basePath is set,
+      // entries outside that subtree are skipped and paths stored relative to
+      // basePath; URL builders re-add the prefix when linking out.
+      const buildDirIndex = (tree, basePath = "") => {
+        // Pre-seed root so deeply-nested-only repos still render cleanly.
         const map = new Map();
-        // Pre-seed an empty root so repos with no top-level entries (e.g. a
-        // single deeply-nested folder) still render cleanly.
         map.set("", []);
+        const prefix = basePath ? `${basePath}/` : "";
         for (const node of tree) {
-          const path = node.path;
+          let path = node.path;
+          if (prefix) {
+            if (!path.startsWith(prefix)) continue;
+            path = path.slice(prefix.length);
+          }
           const lastSlash = path.lastIndexOf("/");
           const parent = lastSlash === -1 ? "" : path.slice(0, lastSlash);
           const name = lastSlash === -1 ? path : path.slice(lastSlash + 1);
@@ -693,6 +858,9 @@
           };
           if (!map.has(parent)) map.set(parent, []);
           map.get(parent).push(entry);
+          // Register dir entries as their own keys so empty folders are
+          // navigable and render as "Empty folder" instead of falling back to root.
+          if (entry.type === "dir" && !map.has(path)) map.set(path, []);
         }
         for (const list of map.values()) {
           list.sort((a, b) => {
@@ -717,11 +885,15 @@
         return s;
       };
 
+      // Build a hash URL for a folder path honoring the current mode's scheme:
+      // repos mode uses "#/" prefix to signal files view, files mode uses "#path".
+      const hashForPath = p => (MODE === "repos" ? `#${repoPathToHash(p)}` : p ? `#${p}` : "#");
+
       const buildParentRow = parentPath => {
         const tr = document.createElement("tr");
         const tdName = document.createElement("td");
         const a = document.createElement("a");
-        a.href = `#${parentPath}`;
+        a.href = hashForPath(parentPath);
         a.dataset.path = parentPath;
         a.dataset.type = "dir";
         a.setAttribute("aria-label", "Parent directory");
@@ -753,9 +925,9 @@
         const a = document.createElement("a");
 
         if (entry.type === "dir") {
-          a.href = `#${entry.path}`;
+          a.href = hashForPath(entry.path);
         } else {
-          a.href = blobUrl(entry.path);
+          a.href = fileUrl(entry);
           a.target = "_blank";
           a.rel = "noopener noreferrer";
         }
@@ -791,28 +963,176 @@
         dom.fileList.replaceChildren(frag);
       };
 
+      // In repos mode the hash doubles as a view switch: "" → repos-list view,
+      // anything with a leading "/" → files view into the self-repo at that
+      // path ("/" = self root, "/pages" = self/pages).
+      const hashToRepoPath = h => (h.startsWith("/") ? h.slice(1) : null);
+      const repoPathToHash = p => (p === null ? "" : "/" + p);
+
+      // Swap thead/caption/breadcrumbs/title for the current repos-mode view.
+      // path === null → list view; string → files view at that path.
+      const adaptReposModeLayout = path => {
+        const thead = document.querySelector(".file-table thead");
+        const caption = document.querySelector(".file-table caption");
+        const nav = dom.breadcrumbs.parentElement;
+        thead.replaceChildren();
+        const tr = document.createElement("tr");
+        if (path === null) {
+          for (const label of ["NAME", "DESCRIPTION", "LAST MOD"]) {
+            const th = document.createElement("th");
+            th.scope = "col";
+            th.textContent = label;
+            tr.appendChild(th);
+          }
+          caption.textContent = "Public repositories";
+          nav.hidden = true;
+          document.title = "Index of /";
+        } else {
+          const thName = document.createElement("th");
+          thName.scope = "col";
+          thName.textContent = "NAME";
+          const thSize = document.createElement("th");
+          thSize.scope = "col";
+          thSize.className = "col-size";
+          thSize.textContent = "SIZE";
+          tr.appendChild(thName);
+          tr.appendChild(thSize);
+          caption.textContent = path ? `Files in /${path}` : "Files in self repository";
+          nav.hidden = false;
+          document.title = path ? `Index of /${path}` : "Index of /";
+        }
+        thead.appendChild(tr);
+      };
+
       const renderDirectoryView = path => {
+        if (MODE === "repos") {
+          adaptReposModeLayout(path);
+          if (path === null) {
+            renderRepoList();
+            return;
+          }
+          renderBreadcrumbs(path);
+          renderFileList(path);
+          return;
+        }
         renderBreadcrumbs(path);
         renderFileList(path);
       };
 
+      // Repos mode: each row is a public repo with a homepage set. Clicking
+      // opens the homepage in a new tab (matches existing root-index behavior).
+      const buildRepoRow = (repo, lastMod) => {
+        const tr = document.createElement("tr");
+
+        const tdName = document.createElement("td");
+        const a = document.createElement("a");
+        a.href = repo.homepage || repo.html_url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.appendChild(makeIcon({ cls: "ph-globe" }));
+        a.appendChild(makeSpan(repo.name));
+        tdName.appendChild(a);
+        tr.appendChild(tdName);
+
+        const tdDesc = document.createElement("td");
+        tdDesc.className = "cell-desc";
+        tdDesc.textContent = repo.description || "—";
+        tr.appendChild(tdDesc);
+
+        const tdDate = document.createElement("td");
+        tdDate.className = "cell-date";
+        tdDate.textContent = formatDate(lastMod);
+        tr.appendChild(tdDate);
+
+        return tr;
+      };
+
+      // Synthetic row for the user-pages repo itself — clicking navigates into
+      // files view (hash "#/") instead of opening externally.
+      const buildSelfRow = () => {
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        const a = document.createElement("a");
+        a.href = "#/";
+        a.dataset.path = "";
+        a.dataset.type = "dir";
+        a.appendChild(makeIcon({ cls: "ph-house", weight: "ph-fill" }));
+        a.appendChild(makeSpan(TARGET.repo));
+        tdName.appendChild(a);
+        tr.appendChild(tdName);
+
+        const tdDesc = document.createElement("td");
+        tdDesc.className = "cell-desc";
+        tdDesc.textContent = state.repo?.description || "Browse this repository";
+        tr.appendChild(tdDesc);
+
+        const tdDate = document.createElement("td");
+        tdDate.className = "cell-date";
+        tdDate.textContent = formatDate(state.repo?.pushed_at);
+        tr.appendChild(tdDate);
+        return tr;
+      };
+
+      const renderRepoList = () => {
+        const frag = document.createDocumentFragment();
+        // Self-repo row first — the entry point into files view.
+        if (state.repo) frag.appendChild(buildSelfRow());
+        const repos = state.repos || [];
+        if (repos.length === 0 && !state.repo) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 3;
+          td.className = "cell-empty";
+          td.textContent = "No public repositories with a homepage";
+          tr.appendChild(td);
+          frag.appendChild(tr);
+        } else {
+          for (const r of repos) frag.appendChild(buildRepoRow(r, state.lastMods?.[r.name]));
+        }
+        dom.fileList.replaceChildren(frag);
+      };
+
+      // Hero in repos mode: show the user's avatar + login, no repo stats.
+      const renderReposHero = ownerLogin => {
+        dom.avatar.src = `https://github.com/${encodeURIComponent(ownerLogin)}.png`;
+        dom.avatar.alt = `${ownerLogin} avatar`;
+        dom.name.textContent = ownerLogin;
+        dom.description.textContent = "Public repositories";
+        dom.stars.hidden = true;
+        dom.forks.hidden = true;
+        dom.watchers.hidden = true;
+        dom.link.href = `https://github.com/${encodeURIComponent(ownerLogin)}`;
+      };
+
+      // Navigate to a folder path, update history, re-render, and rehome focus.
+      // In repos mode, path === null routes to the repos-list view (clears hash);
+      // a string routes to files view at that path (hash "#/" + path).
       const navigateTo = (path, { push = true } = {}) => {
-        const targetPath = state.dirIndex.has(path) ? path : "";
+        let targetPath;
+        if (MODE === "repos" && path === null) {
+          targetPath = null;
+        } else {
+          targetPath = state.dirIndex.has(path) ? path : "";
+        }
         state.currentPath = targetPath;
+
+        const buildUrl = p => {
+          if (MODE === "repos") {
+            return p === null ? location.pathname + location.search : `#${repoPathToHash(p)}`;
+          }
+          return p ? `#${p}` : "#";
+        };
+
         if (push) {
-          const hash = targetPath ? `#${targetPath}` : "#";
-          history.pushState({ path: targetPath }, "", hash);
+          history.pushState({ path: targetPath }, "", buildUrl(targetPath));
         } else if (targetPath !== path) {
-          // Manual URL edit landed on a non-existent folder — normalize the address bar
-          // so it reflects what's actually shown instead of leaving stale `#garbage`.
-          const url = targetPath ? `#${targetPath}` : location.pathname + location.search;
-          history.replaceState({ path: targetPath }, "", url);
+          // Manual URL edit hit a missing folder — rewrite the bar to match.
+          history.replaceState({ path: targetPath }, "", buildUrl(targetPath));
         }
         renderDirectoryView(targetPath);
-        announceDirectory(targetPath);
-        // Reset viewport and move keyboard focus into the new table — the previously
-        // focused row's anchor was just removed by replaceChildren, which would
-        // otherwise drop focus to <body>.
+        announceDirectory(targetPath === null ? "" : targetPath);
+        // replaceChildren just dropped the focused anchor; rehome focus
+        // instead of letting it fall back to <body>.
         window.scrollTo({ top: 0, behavior: "instant" });
         const firstLink = dom.fileList.querySelector("a");
         if (firstLink) firstLink.focus({ preventScroll: true });
@@ -822,12 +1142,11 @@
         const ol = dom.breadcrumbs;
         ol.replaceChildren();
 
-        // Original case in the DOM; CSS `text-transform: uppercase` handles display.
-        // Screen readers then receive natural-case text rather than all-caps (which
-        // some AT spells out letter-by-letter).
+        // Keep natural case in the DOM (CSS uppercases it); some SRs spell
+        // all-caps text letter-by-letter.
         const rootLi = document.createElement("li");
         const rootA = document.createElement("a");
-        rootA.href = "#";
+        rootA.href = hashForPath("");
         rootA.dataset.path = "";
         rootA.textContent = "Root";
         if (!path) rootA.setAttribute("aria-current", "page");
@@ -849,7 +1168,7 @@
 
           const li = document.createElement("li");
           const a = document.createElement("a");
-          a.href = `#${acc}`;
+          a.href = hashForPath(acc);
           a.dataset.path = acc;
           a.textContent = seg;
           if (idx === segments.length - 1) a.setAttribute("aria-current", "page");
@@ -865,15 +1184,19 @@
         dom.description.textContent = repo.description || "No description";
         dom.stars.querySelector(".badge-count").textContent = `${formatCount(repo.stargazers_count)} STARS`;
         dom.forks.querySelector(".badge-count").textContent = `${formatCount(repo.forks_count)} FORKS`;
-        // GitHub's `watchers_count` is an alias for `stargazers_count`; the true
-        // watcher metric is `subscribers_count`.
+        // subscribers_count is the true watcher count; watchers_count aliases stargazers_count.
         dom.watchers.querySelector(".badge-count").textContent = `${formatCount(repo.subscribers_count)} WATCHERS`;
-        dom.link.href = repo.html_url;
+        if (TARGET.basePath) {
+          const branch = repo.default_branch || "main";
+          const enc = str => str.split("/").map(encodeURIComponent).join("/");
+          dom.link.href = `${repo.html_url}/tree/${encodeURIComponent(branch)}/${enc(TARGET.basePath)}`;
+        } else {
+          dom.link.href = repo.html_url;
+        }
       };
 
+      // Map typed errors to user-facing alert copy; raw error stays in console.
       const handleError = err => {
-        // User-facing messages below are intentionally concise; keep the raw error
-        // in devtools for diagnosing network, CORS, or unexpected status codes.
         console.error(err);
         if (err instanceof RateLimitError) {
           const when = err.resetAt ? `at ${formatHHMM(err.resetAt)}` : "shortly";
@@ -903,36 +1226,35 @@
         }
       };
 
-      // Shared render path for cold-fetch and cache-warm boot. Revalidation keeps its
-      // fine-grained repo/tree branching so unchanged sections aren't re-rendered.
+      // Shared render path for cold-fetch and warm-cache boot.
       const hydrateUI = hash => {
         renderHero(state.repo);
         state.currentPath = state.dirIndex.has(hash) ? hash : "";
         renderDirectoryView(state.currentPath);
       };
 
+      // Warm path: render cached data instantly, revalidate in background.
+      // Cold path: load + cache. Dispatches to the mode-specific boot/revalidate;
+      // both fetches are abortable via newAbortController.
       const boot = async () => {
         const ctrl = newAbortController();
         const cache = readCache();
+        if (MODE === "repos") return bootRepos(ctrl, cache);
+        return bootFiles(ctrl, cache);
+      };
 
+      const bootFiles = async (ctrl, cache) => {
         if (cache) {
-          // Warm path: render immediately, revalidate in background
           state.repo = cache.repo;
           state.tree = cache.tree;
-          state.dirIndex = buildDirIndex(state.tree);
+          state.dirIndex = buildDirIndex(state.tree, TARGET.basePath);
           hydrateUI(currentHashPath());
           showView("main");
           setCacheLabel("CACHED · REVALIDATING…");
-          // Background revalidation. `revalidate` handles all error kinds internally
-          // (rate-limit banner, or silent fallback). The .catch is a double-suppression
-          // safety net that prevents an unhandled-promise-rejection warning if a future
-          // edit to revalidate ever propagates an error — never surface errors to the
-          // user here, since that would hide the cache we just rendered.
-          revalidate(cache, ctrl.signal).catch(() => {});
+          revalidateFiles(cache, ctrl.signal).catch(() => {});
           return;
         }
 
-        // Cold path
         showView("loader");
         try {
           const repoRes = await githubFetch(repoApiPath(), { signal: ctrl.signal });
@@ -948,7 +1270,7 @@
           }
           state.repo = repoRes.body;
           state.tree = treeRes.body.tree;
-          state.dirIndex = buildDirIndex(state.tree);
+          state.dirIndex = buildDirIndex(state.tree, TARGET.basePath);
 
           writeCache({
             repo: state.repo,
@@ -965,18 +1287,98 @@
         }
       };
 
-      const revalidate = async (cache, signal) => {
+      // Parallel last-mod lookup — one /branches/:branch call per repo.
+      // Failures degrade to null (shown as "—") so a single bad repo doesn't
+      // break the whole list.
+      const fetchLastMods = async (repos, signal) => {
+        const pairs = await Promise.all(
+          repos.map(async r => {
+            try {
+              const res = await githubFetch(branchPath(r.owner.login, r.name, r.default_branch), { signal });
+              return [r.name, res.body?.commit?.commit?.committer?.date || null];
+            } catch {
+              return [r.name, null];
+            }
+          })
+        );
+        return Object.fromEntries(pairs);
+      };
+
+      // Initial repos-mode view from the URL hash: "" → list, "/..." → files.
+      const initialReposPath = () => hashToRepoPath(currentHashPath());
+
+      const bootRepos = async (ctrl, cache) => {
+        if (cache) {
+          state.repos = cache.repos;
+          state.lastMods = cache.lastMods || {};
+          state.repo = cache.repo || null;
+          state.tree = cache.tree || [];
+          state.dirIndex = buildDirIndex(state.tree, "");
+          renderReposHero(cache.ownerLogin || TARGET.owner);
+          const path = initialReposPath();
+          state.currentPath = path === null ? null : state.dirIndex.has(path) ? path : "";
+          renderDirectoryView(state.currentPath);
+          showView("main");
+          setCacheLabel("CACHED · REVALIDATING…");
+          revalidateRepos(cache, ctrl.signal).catch(() => {});
+          return;
+        }
+
+        showView("loader");
         try {
-          // Warm-path parallelism: we already know default_branch from the cached repo,
-          // so both conditional requests can fire simultaneously.
+          // Phase 1: repos list + self-repo metadata in parallel.
+          const [reposRes, repoRes] = await Promise.all([
+            githubFetch(userReposPath(), { signal: ctrl.signal }),
+            githubFetch(repoApiPath(), { signal: ctrl.signal })
+          ]);
+          const ownerLogin = reposRes.body[0]?.owner?.login || TARGET.owner;
+          const filtered = reposRes.body.filter(r => r.homepage && r.name !== TARGET.repo);
+
+          // Phase 2: last-mods for each repo + self-repo tree in parallel.
+          const [lastMods, treeRes] = await Promise.all([
+            fetchLastMods(filtered, ctrl.signal),
+            githubFetch(treePath(repoRes.body.default_branch), { signal: ctrl.signal })
+          ]);
+          const tree = treeRes.body?.truncated ? [] : treeRes.body?.tree || [];
+
+          state.repos = filtered;
+          state.lastMods = lastMods;
+          state.repo = repoRes.body;
+          state.tree = tree;
+          state.dirIndex = buildDirIndex(tree, "");
+
+          writeCache({
+            repos: filtered,
+            lastMods,
+            ownerLogin,
+            repo: state.repo,
+            tree,
+            etag: { repos: reposRes.etag, repo: repoRes.etag, tree: treeRes.etag }
+          });
+
+          renderReposHero(ownerLogin);
+          const path = initialReposPath();
+          state.currentPath = path === null ? null : state.dirIndex.has(path) ? path : "";
+          renderDirectoryView(state.currentPath);
+          showView("main");
+          setCacheLabel(`UPDATED ${formatHHMM()}`);
+        } catch (err) {
+          if (err?.name === "AbortError") return;
+          handleError(err);
+        }
+      };
+
+      // Parallel ETag-conditional refresh of cached repo + tree; silent on error.
+      const revalidateFiles = async (cache, signal) => {
+        try {
+          // Known default_branch from cache lets both conditional fetches fire in parallel.
           const cachedBranch = cache.repo.default_branch;
           let [repoRes, treeRes] = await Promise.all([
             githubFetch(repoApiPath(), { etag: cache.etag?.repo, signal }),
             githubFetch(treePath(cachedBranch), { etag: cache.etag?.tree, signal })
           ]);
 
-          // If upstream renamed the default branch, the parallel tree fetch raced the old
-          // name. Refetch against the new branch without an ETag (the old one won't match).
+          // Default branch rename: refetch the tree against the new name without ETag.
           if (repoRes.status === 200 && repoRes.body.default_branch !== cachedBranch) {
             treeRes = await githubFetch(treePath(repoRes.body.default_branch), { signal });
           }
@@ -987,14 +1389,13 @@
           if (repoChanged) state.repo = repoRes.body;
           if (treeChanged) {
             if (treeRes.body.truncated) {
-              // Revalidation now sees a truncated tree — keep the cached view but warn via banner.
+              // Upstream now truncates — keep the cached view and warn via label.
               setCacheLabel("CACHED · UPSTREAM TRUNCATED");
               return;
             }
             state.tree = treeRes.body.tree;
-            state.dirIndex = buildDirIndex(state.tree);
-            // If the user's current path disappeared after rebuild, fall back to root.
-            // Also rewrite the address bar so the back button stays consistent.
+            state.dirIndex = buildDirIndex(state.tree, TARGET.basePath);
+            // Current path vanished after rebuild → reset to root; sync address bar.
             if (!state.dirIndex.has(state.currentPath)) {
               state.currentPath = "";
               history.replaceState({ path: "" }, "", location.pathname + location.search);
@@ -1020,15 +1421,85 @@
             setCacheLabel("CACHED · API RATE-LIMITED");
             return;
           }
-          // Any other revalidation error: stay on cached content silently.
+          // Any other revalidation error → stay on cached content silently,
+          // but clear the "REVALIDATING…" label so the UI doesn't look stuck.
+          setCacheLabel("CACHED");
+        }
+      };
+
+      // Parallel ETag refresh of repos + self-repo + self-tree. Silent on error.
+      const revalidateRepos = async (cache, signal) => {
+        try {
+          const cachedBranch = cache.repo?.default_branch;
+          const [reposRes, repoRes, treeRes] = await Promise.all([
+            githubFetch(userReposPath(), { etag: cache.etag?.repos, signal }),
+            githubFetch(repoApiPath(), { etag: cache.etag?.repo, signal }),
+            cachedBranch
+              ? githubFetch(treePath(cachedBranch), { etag: cache.etag?.tree, signal })
+              : Promise.resolve({ status: 200, body: { tree: [], truncated: false }, etag: null })
+          ]);
+
+          let currentTreeRes = treeRes;
+          if (repoRes.status === 200 && repoRes.body.default_branch !== cachedBranch) {
+            // Default-branch rename on the self-repo: refetch tree fresh.
+            currentTreeRes = await githubFetch(treePath(repoRes.body.default_branch), { signal });
+          }
+
+          const reposChanged = reposRes.status === 200;
+          const repoChanged = repoRes.status === 200;
+          const treeChanged = currentTreeRes.status === 200;
+
+          let ownerLogin = cache.ownerLogin || TARGET.owner;
+          if (reposChanged) {
+            ownerLogin = reposRes.body[0]?.owner?.login || ownerLogin;
+            state.repos = reposRes.body.filter(r => r.homepage && r.name !== TARGET.repo);
+            state.lastMods = await fetchLastMods(state.repos, signal);
+          }
+          if (repoChanged) state.repo = repoRes.body;
+          if (treeChanged) {
+            state.tree = currentTreeRes.body?.truncated ? [] : currentTreeRes.body?.tree || [];
+            state.dirIndex = buildDirIndex(state.tree, "");
+            // Current path vanished after rebuild → reset to list view.
+            if (state.currentPath !== null && !state.dirIndex.has(state.currentPath)) {
+              state.currentPath = null;
+              history.replaceState({}, "", location.pathname + location.search);
+            }
+          }
+
+          writeCache({
+            repos: state.repos,
+            lastMods: state.lastMods,
+            ownerLogin,
+            repo: state.repo,
+            tree: state.tree,
+            etag: {
+              repos: reposChanged ? reposRes.etag : cache.etag?.repos,
+              repo: repoChanged ? repoRes.etag : cache.etag?.repo,
+              tree: treeChanged ? currentTreeRes.etag : cache.etag?.tree
+            }
+          });
+
+          if (reposChanged || repoChanged) renderReposHero(ownerLogin);
+          renderDirectoryView(state.currentPath);
+          setCacheLabel(`UPDATED ${formatHHMM()}`);
+        } catch (err) {
+          if (err?.name === "AbortError") return;
+          if (err instanceof RateLimitError) {
+            showRateLimitBanner(err.resetAt);
+            setCacheLabel("CACHED · API RATE-LIMITED");
+            return;
+          }
+          // Any other revalidation error → stay on cached content silently,
+          // but clear the "REVALIDATING…" label so the UI doesn't look stuck.
+          setCacheLabel("CACHED");
         }
       };
 
       dom.errorRetry.addEventListener("click", boot);
       boot();
 
-      // Intercept folder/breadcrumb anchor clicks; let file links use native target=_blank,
-      // and preserve the OS convention of meta/ctrl/middle-click to open in a new tab.
+      // Intercept folder/breadcrumb clicks only; file anchors and modifier-clicks
+      // keep native behavior (new tab, etc.).
       document.addEventListener("click", e => {
         if (!state.dirIndex) return;
         const a = e.target.closest("a[data-path]");
@@ -1039,14 +1510,14 @@
         navigateTo(a.dataset.path);
       });
 
-      // popstate covers back/forward; hashchange covers manual URL-bar edits.
-      // Both events can fire on the same back/forward, so we dedup by comparing
-      // the target path to state.currentPath before re-rendering.
+      // popstate = back/forward, hashchange = manual URL edits. Both may fire
+      // for the same back/forward, so dedup against state.currentPath.
       const onHashNavigation = () => {
         if (!state.dirIndex) return;
-        const hashPath = currentHashPath();
-        if (hashPath === state.currentPath) return;
-        navigateTo(hashPath, { push: false });
+        const raw = currentHashPath();
+        const next = MODE === "repos" ? hashToRepoPath(raw) : raw;
+        if (next === state.currentPath) return;
+        navigateTo(next, { push: false });
       };
       window.addEventListener("popstate", onHashNavigation);
       window.addEventListener("hashchange", onHashNavigation);
