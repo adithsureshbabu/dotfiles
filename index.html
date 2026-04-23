@@ -1,431 +1,1055 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title></title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Repository Index</title>
+    <meta name="description" content="GitHub repository index." />
+    <meta name="color-scheme" content="light" />
+    <meta property="og:title" content="Repository Index" />
+    <meta property="og:type" content="website" />
+    <meta property="og:description" content="GitHub repository index." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://api.github.com" crossorigin />
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Icons (regular for most; fill weight for folder glyph) -->
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+
+    <!-- Neo-brutalist design system (plug-and-play bundle) -->
+    <link rel="stylesheet" href="/neo-brutalist/brutalist.css" />
+    <link rel="stylesheet" href="/neo-brutalist/brutalist-icons.css" />
+
+    <!-- Page-specific layout (self-contained in index.html) -->
     <style>
-        * {
-            word-break: break-word;
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--nb-bg);
+        color: var(--nb-ink);
+        font-family: var(--nb-font-heading);
+        min-height: 100%;
+      }
+
+      /* Defensive: hidden attribute must win over component display rules.
+       Carve out .nb-loader because the NB system uses [hidden] for its fade-out. */
+      [hidden]:not(.nb-loader) {
+        display: none !important;
+      }
+
+      .container {
+        max-width: 1120px;
+        margin-inline: auto;
+        padding: 32px 24px 64px;
+      }
+
+      /* Keyboard skip link: hidden offscreen, revealed on focus. */
+      .skip-link {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 100;
+        padding: 8px 12px;
+        background: var(--nb-ink);
+        color: var(--nb-bg);
+        font-family: var(--nb-font-mono);
+        font-weight: 700;
+        text-decoration: none;
+        border: var(--nb-border-sm);
+        transform: translateY(-200%);
+      }
+      .skip-link:focus {
+        transform: translateY(0);
+        outline: 3px solid var(--nb-accent-3);
+        outline-offset: 2px;
+      }
+
+      /* Hero */
+      .hero {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-areas:
+          "avatar title"
+          "avatar desc"
+          "stats  stats"
+          "link   cache";
+        gap: 12px 16px;
+        margin-bottom: 24px;
+      }
+      .hero-avatar {
+        grid-area: avatar;
+        width: 64px;
+        height: 64px;
+        border: var(--nb-border-sm);
+        box-shadow: var(--nb-shadow-sm);
+        object-fit: cover;
+        background: var(--nb-surface);
+      }
+      .hero-name {
+        grid-area: title;
+        font-size: clamp(22px, 3.5vw, 32px);
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        line-height: 1.1;
+        margin: 0;
+        word-break: break-word;
+      }
+      .hero-desc {
+        grid-area: desc;
+        font-family: var(--nb-font-mono);
+        font-size: 13px;
+        color: var(--nb-ink-muted);
+        margin: 0;
+      }
+      .hero-stats {
+        grid-area: stats;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+      .hero-stats .nb-badge.accent-star {
+        background: var(--nb-accent-3);
+      }
+      .hero-stats .nb-badge.accent-fork {
+        background: var(--nb-accent-2);
+      }
+      .hero-stats .nb-badge.accent-watch {
+        background: var(--nb-accent-4);
+      }
+
+      .hero-link {
+        /* .nb-btn supplies inline-flex + align-items; gap spaces label and icon. */
+        grid-area: link;
+        justify-self: start;
+        text-decoration: none;
+        gap: 8px;
+      }
+      .hero-cache-label {
+        grid-area: cache;
+        align-self: center;
+        justify-self: end;
+        margin: 0;
+        min-height: 16px;
+      }
+
+      /* Breadcrumbs */
+      .breadcrumbs {
+        font-family: var(--nb-font-mono);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--nb-ink);
+        margin-bottom: 16px;
+      }
+      .breadcrumbs ol {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        margin: 0;
+        padding: 0;
+      }
+      .breadcrumbs a {
+        color: var(--nb-ink);
+        text-decoration: none;
+        padding: 4px 6px;
+        border: 2px solid transparent;
+      }
+      .breadcrumbs a:hover {
+        background: var(--nb-accent-1);
+      }
+      .breadcrumbs a:focus-visible {
+        outline: 3px solid var(--nb-ink);
+        outline-offset: 2px;
+      }
+      .breadcrumbs .sep {
+        color: var(--nb-ink-muted);
+        user-select: none;
+      }
+
+      /* Rate-limit banner */
+      .ratelimit-banner {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        margin-bottom: 16px;
+        text-align: center;
+      }
+
+      /* File explorer */
+      .explorer {
+        padding: 0;
+      }
+      .file-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--nb-font-mono);
+        font-size: 13px;
+      }
+      .file-table thead tr {
+        background: var(--nb-accent-1);
+      }
+      .file-table th {
+        text-align: left;
+        padding: 12px 16px;
+        font-family: var(--nb-font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--nb-ink);
+        border-bottom: var(--nb-border-sm);
+      }
+      .file-table th.col-size {
+        text-align: right;
+      }
+      .file-table td {
+        padding: 0;
+        border-top: 2px solid var(--nb-ink);
+        vertical-align: middle;
+      }
+      .file-table tbody tr:hover {
+        background: var(--nb-accent-4);
+      }
+      .file-table tbody tr:has(a:focus-visible) {
+        background: var(--nb-accent-4);
+      }
+      .file-table td a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        color: inherit;
+        text-decoration: none;
+        min-height: 44px;
+      }
+      .file-table td.cell-size {
+        padding: 12px 16px;
+        text-align: right;
+        color: var(--nb-ink-muted);
+        font-size: 12px;
+      }
+      .file-table td.cell-empty {
+        padding: 16px;
+        color: var(--nb-ink-muted);
+        font-style: italic;
+        text-align: center;
+      }
+      .file-icon {
+        color: var(--nb-ink);
+      }
+      .file-icon.folder {
+        color: var(--nb-accent-3);
+      }
+
+      /* Error card */
+      .error-card {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-align: left;
+        box-shadow: 5px 5px 0 var(--nb-error);
+        border-color: var(--nb-ink);
+      }
+      .error-heading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--nb-error);
+      }
+      .error-card h2 {
+        font-size: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0;
+        color: var(--nb-ink);
+      }
+      .error-card p {
+        font-family: var(--nb-font-mono);
+        font-size: 13px;
+        color: var(--nb-ink);
+        margin: 0;
+      }
+      .error-card .error-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      @media (max-width: 640px) {
+        .hero {
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "avatar"
+            "title"
+            "desc"
+            "stats"
+            "link"
+            "cache";
         }
-        body {
-            font-family: 'Inter', sans-serif;
+        .hero-cache-label {
+          justify-self: start;
         }
-        /* Custom scrollbar for better aesthetics */
-        ::-webkit-scrollbar {
-            width: 8px;
+      }
+
+      /* Local safety net: still respect reduced-motion even if the NB bundle's
+         loader animation isn't wrapped in the same media query. */
+      @media (prefers-reduced-motion: reduce) {
+        .nb-loader-block {
+          animation: none;
         }
-        ::-webkit-scrollbar-track {
-            background: #1e293b;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
-        .icon-spin {
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
-            }
-        }
-        .table-fixed-layout {
-            table-layout: fixed;
-        }
+      }
     </style>
-</head>
-<body class="bg-slate-900 text-slate-300 antialiased">
-
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
-
-        <!-- Loading and Error States -->
-        <div id="loader" class="text-center py-10">
-            <i class="fas fa-spinner icon-spin text-4xl text-indigo-400"></i>
-            <p class="mt-2 text-slate-400">Fetching Repository...</p>
-        </div>
-        <div id="error" class="text-center py-10 hidden bg-red-900/20 border border-red-500/30 rounded-lg max-w-2xl mx-auto">
-            <i class="fas fa-exclamation-triangle text-4xl text-red-400"></i>
-            <p id="errorMessage" class="mt-2 text-red-300"></p>
-        </div>
-
-        <!-- Repository Details & Content -->
-        <div id="repoContainer" class="hidden">
-            <!-- Repo Info Card (Now serves as the main header) -->
-            <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-6 mb-8 shadow-lg backdrop-blur-sm">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-                    <div>
-                        <div class="flex items-center mb-2">
-                             <img id="repoOwnerAvatar" src="" class="w-10 h-10 rounded-full mr-4" alt="Owner Avatar">
-                            <h1 id="repoName" class="text-3xl font-bold text-white"></h1>
-                        </div>
-                        <p id="repoDescription" class="text-slate-400 mb-4 pl-14"></p>
-                    </div>
-                    <div class="flex space-x-4 text-sm mt-4 sm:mt-0 self-start sm:self-center">
-                        <span id="repoStars" class="flex items-center"><i class="fas fa-star mr-1 text-yellow-400"></i> Stars</span>
-                        <span id="repoForks" class="flex items-center"><i class="fas fa-code-branch mr-1 text-green-400"></i> Forks</span>
-                        <span id="repoWatchers" class="flex items-center"><i class="fas fa-eye mr-1 text-blue-400"></i> Watchers</span>
-                    </div>
-                </div>
-                 <a id="repoLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-block mt-2 pl-14 text-indigo-400 hover:text-indigo-300 text-sm">
-                    View on GitHub <i class="fas fa-external-link-alt ml-1"></i>
-                </a>
-            </div>
-
-            <!-- Breadcrumbs -->
-            <div id="breadcrumbs" class="mb-4 text-slate-400 flex items-center flex-wrap"></div>
-
-            <!-- File Explorer -->
-            <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden">
-                <table class="w-full text-left table-fixed-layout">
-                    <thead class="bg-slate-700/50">
-                        <tr>
-                            <th class="p-4 font-semibold text-white w-2/5">Name</th>
-                            <th class="p-4 font-semibold text-white w-2/5 hidden sm:table-cell">Last commit</th>
-                            <th class="p-4 font-semibold text-white hidden md:table-cell">Date</th>
-                            <th class="p-4 font-semibold text-white text-right">Size</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fileList">
-                        <!-- Content will be injected here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  </head>
+  <body>
+    <a class="skip-link" href="#fileList">Skip to files</a>
+    <div id="loader" class="nb-loader">
+      <div class="nb-loader-blocks" aria-hidden="true">
+        <span class="nb-loader-block"></span>
+        <span class="nb-loader-block"></span>
+        <span class="nb-loader-block"></span>
+        <span class="nb-loader-block"></span>
+      </div>
     </div>
 
-    <script>
-        const loader = document.getElementById('loader');
-        const errorContainer = document.getElementById('error');
-        const errorMessage = document.getElementById('errorMessage');
-        const repoContainer = document.getElementById('repoContainer');
-        const fileList = document.getElementById('fileList');
-        const breadcrumbs = document.getElementById('breadcrumbs');
+    <main id="appMain" class="container" aria-label="Repository files" aria-busy="true">
+      <div id="mainContent" hidden>
+        <header class="hero nb-card">
+          <img id="repoAvatar" class="hero-avatar" width="64" height="64" alt="" />
+          <h1 id="repoName" class="hero-name">owner/repo</h1>
+          <p id="repoDescription" class="hero-desc"></p>
+          <div class="hero-stats">
+            <span id="repoStars" class="nb-badge accent-star">
+              <i class="ph ph-star nb-icon nb-icon--sm" aria-hidden="true"></i>
+              <span class="badge-count">— STARS</span>
+            </span>
+            <span id="repoForks" class="nb-badge accent-fork">
+              <i class="ph ph-git-fork nb-icon nb-icon--sm" aria-hidden="true"></i>
+              <span class="badge-count">— FORKS</span>
+            </span>
+            <span id="repoWatchers" class="nb-badge accent-watch">
+              <i class="ph ph-eye nb-icon nb-icon--sm" aria-hidden="true"></i>
+              <span class="badge-count">— WATCHERS</span>
+            </span>
+          </div>
+          <a id="repoLink" class="hero-link nb-btn nb-btn--active" href="#" target="_blank" rel="noopener noreferrer">
+            <span>VIEW ON GITHUB</span>
+            <i class="ph ph-arrow-square-out nb-icon" aria-hidden="true"></i>
+          </a>
+          <p id="repoCacheLabel" class="hero-cache-label nb-card-label" hidden></p>
+        </header>
 
-        let currentOwner = '';
-        let currentRepo = '';
-        let currentPath = '';
-        let commitCache = {};
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <ol id="breadcrumbs">
+            <li><a href="#" data-path="">Root</a></li>
+          </ol>
+        </nav>
 
-        // Initialize with the specific repo on page load
-        window.onload = () => {
-            let url = new URL(window.location.href);
-            let domain = url.hostname;
-            let path = url.pathname;
-            let owner = domain.endsWith("github.io") ? domain?.split(".")?.[0] : "freeCodeCamp";
-            let repo = domain.endsWith("github.io") ? path?.split('/')?.filter(Boolean)?.[0] : "freeCodeCamp";
-            document.title = `${owner}/${repo}`;
-            loadRepository(owner, repo);
-        };
-        
-        // --- Core Functions ---
+        <div id="ratelimitBanner" class="ratelimit-banner nb-badge nb-badge--fail" role="alert" hidden></div>
 
-        function loadRepository(owner, repo) {
-            currentOwner = owner;
-            currentRepo = repo;
-            currentPath = '';
-            commitCache = {};
+        <section class="explorer nb-card">
+          <table class="file-table">
+            <caption class="nb-sr-only">
+              Files in current directory
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">NAME</th>
+                <th scope="col" class="col-size">SIZE</th>
+              </tr>
+            </thead>
+            <tbody id="fileList"></tbody>
+          </table>
+        </section>
+      </div>
 
-            hideError();
-            repoContainer.classList.add('hidden');
-            loader.classList.remove('hidden');
+      <div id="statusAnnouncer" class="nb-sr-only" role="status"></div>
 
-            Promise.all([
-                fetchRepoDetails(currentOwner, currentRepo),
-                fetchAndDisplayContents(currentOwner, currentRepo, '')
-            ]).catch(err => {
-                showError(`Failed to fetch repository data. Error: ${err.message}. Please check your network connection.`);
-                loader.classList.add('hidden');
+      <div id="errorContent" hidden>
+        <section class="nb-card error-card" role="alert">
+          <div class="error-heading">
+            <i class="ph ph-warning nb-icon nb-icon--lg" role="img" aria-label="Warning"></i>
+            <h2 id="errorTitle" tabindex="-1">SOMETHING WENT WRONG</h2>
+          </div>
+          <p id="errorMessage"></p>
+          <div class="error-actions">
+            <button id="errorRetry" class="nb-btn nb-btn--active" type="button" hidden>
+              <i class="ph ph-arrow-clockwise nb-icon" aria-hidden="true"></i>
+              <span>RETRY</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module">
+      // Resolve which { owner, repo } to render. Precedence:
+      //   1. ?o=&r= query params — explicit override, works for any deployment.
+      //   2. github.io subdomain + first path segment — lets this file auto-target
+      //      the repo it's deployed as (e.g. johndoe.github.io/my-awesome-repo).
+      //   3. Demo fallback — keeps the file usable as a static sample when opened
+      //      without any of the above context.
+      const resolveTarget = () => {
+        const url = new URL(window.location.href);
+        const qOwner = url.searchParams.get("o");
+        const qRepo = url.searchParams.get("r");
+        if (qOwner && qRepo) return { owner: qOwner, repo: qRepo };
+
+        const host = url.hostname;
+        const firstSeg = url.pathname.split("/").filter(Boolean)[0];
+        if (host.endsWith("github.io") && firstSeg) {
+          return { owner: host.split(".")[0], repo: firstSeg };
+        }
+        return { owner: "freeCodeCamp", repo: "freeCodeCamp" };
+      };
+
+      const TARGET = resolveTarget();
+      document.title = `${TARGET.owner}/${TARGET.repo}`;
+
+      const $ = id => document.getElementById(id);
+      // Browsers return location.hash already percent-encoded, but state.dirIndex is
+      // keyed on the raw paths from GitHub. Decode so folders with spaces/#/? survive
+      // back-button round-trips instead of snapping to root.
+      const currentHashPath = () => {
+        try {
+          return decodeURIComponent(window.location.hash.replace(/^#/, ""));
+        } catch {
+          return "";
+        }
+      };
+      const dom = {
+        loader: $("loader"),
+        appMain: $("appMain"),
+        main: $("mainContent"),
+        errorView: $("errorContent"),
+        errorTitle: $("errorTitle"),
+        errorMessage: $("errorMessage"),
+        errorRetry: $("errorRetry"),
+        avatar: $("repoAvatar"),
+        name: $("repoName"),
+        description: $("repoDescription"),
+        stars: $("repoStars"),
+        forks: $("repoForks"),
+        watchers: $("repoWatchers"),
+        link: $("repoLink"),
+        cacheLabel: $("repoCacheLabel"),
+        ratelimit: $("ratelimitBanner"),
+        fileList: $("fileList"),
+        breadcrumbs: $("breadcrumbs"),
+        announcer: $("statusAnnouncer")
+      };
+
+      const state = {
+        repo: null,
+        tree: null,
+        dirIndex: null,
+        currentPath: ""
+      };
+
+      // Typed errors let handleError switch on `instanceof` and keep stack traces.
+      class GitHubError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = "GitHubError";
+        }
+      }
+      class RateLimitError extends GitHubError {
+        constructor(resetAt) {
+          super("GitHub rate limit reached");
+          this.name = "RateLimitError";
+          this.resetAt = resetAt;
+        }
+      }
+      class NotFoundError extends GitHubError {
+        constructor() {
+          super("Repository not found");
+          this.name = "NotFoundError";
+        }
+      }
+      class HttpError extends GitHubError {
+        constructor(status) {
+          super(`GitHub HTTP ${status}`);
+          this.name = "HttpError";
+          this.status = status;
+        }
+      }
+
+      // Cancels any prior in-flight boot/revalidate so a retry, popstate, or
+      // hashchange can't race a stale response over the fresh render.
+      let currentAbort = null;
+      const newAbortController = () => {
+        if (currentAbort) currentAbort.abort();
+        currentAbort = new AbortController();
+        return currentAbort;
+      };
+
+      const repoApiPath = (suffix = "") =>
+        `/repos/${encodeURIComponent(TARGET.owner)}/${encodeURIComponent(TARGET.repo)}${suffix}`;
+
+      const treePath = branch => repoApiPath(`/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+
+      // Builds a github.com blob URL for a file. Encodes each segment separately so
+      // "/" stays as a path separator while "#", "?", etc. inside names are escaped.
+      const blobUrl = entryPath => {
+        const branch = state.repo?.default_branch || "main";
+        const enc = str => str.split("/").map(encodeURIComponent).join("/");
+        const owner = encodeURIComponent(TARGET.owner);
+        const repo = encodeURIComponent(TARGET.repo);
+        return `https://github.com/${owner}/${repo}/blob/${enc(branch)}/${enc(entryPath)}`;
+      };
+
+      const githubFetch = async (path, { etag, signal } = {}) => {
+        const headers = { Accept: "application/vnd.github+json" };
+        if (etag) headers["If-None-Match"] = etag;
+        const res = await fetch(`https://api.github.com${path}`, { headers, signal });
+
+        if (res.status === 304) return { status: 304, etag };
+        if (res.status === 403) {
+          const remaining = res.headers.get("X-RateLimit-Remaining");
+          if (remaining === "0") {
+            const rawReset = res.headers.get("X-RateLimit-Reset");
+            const resetEpoch = rawReset ? parseInt(rawReset, 10) : 0;
+            // A missing/zero reset header means we can't place the reset time — surface as
+            // null so the UI can show "shortly" instead of a bogus 1970-derived clock.
+            const resetAt = resetEpoch > 0 ? new Date(resetEpoch * 1000) : null;
+            throw new RateLimitError(resetAt);
+          }
+          throw new HttpError(403);
+        }
+        if (res.status === 404) throw new NotFoundError();
+        if (!res.ok) throw new HttpError(res.status);
+        return { status: 200, body: await res.json(), etag: res.headers.get("ETag") };
+      };
+
+      // View visibility table keyed by logical app state; the loader uses the
+      // NB fade-out so its hidden attribute is still honored via the CSS carve-out.
+      const VIEWS = {
+        loader: { loader: false, main: true, error: true, busy: "true" },
+        main: { loader: true, main: false, error: true, busy: "false" },
+        error: { loader: true, main: true, error: false, busy: "false" }
+      };
+
+      const showView = name => {
+        const v = VIEWS[name];
+        dom.loader.hidden = v.loader;
+        dom.main.hidden = v.main;
+        dom.errorView.hidden = v.error;
+        dom.appMain.setAttribute("aria-busy", v.busy);
+      };
+
+      const showError = ({ title, message, showRetry }) => {
+        showView("error");
+        dom.errorTitle.textContent = title;
+        dom.errorMessage.textContent = message;
+        dom.errorRetry.hidden = !showRetry;
+        // tabindex="-1" is set statically on the h2 so it's programmatically focusable
+        // without entering the tab order; moving focus here lands SR users on the alert.
+        dom.errorTitle.focus();
+      };
+
+      const formatCount = n => (n == null ? "—" : n.toLocaleString());
+
+      const formatBytes = bytes => {
+        if (bytes == null) return "—";
+        if (bytes === 0) return "0 B";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${parseFloat((bytes / 1024 ** i).toFixed(1))} ${units[i]}`;
+      };
+
+      const formatHHMM = (d = new Date()) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      const ICON_BY_EXT = {
+        md: "ph-file-text",
+        json: "ph-brackets-curly",
+        jsonc: "ph-brackets-curly",
+        toml: "ph-gear",
+        yml: "ph-gear",
+        yaml: "ph-gear",
+        conf: "ph-gear",
+        png: "ph-image",
+        jpg: "ph-image",
+        jpeg: "ph-image",
+        gif: "ph-image",
+        svg: "ph-image",
+        webp: "ph-image",
+        zip: "ph-file-archive",
+        tar: "ph-file-archive",
+        gz: "ph-file-archive",
+        rar: "ph-file-archive",
+        pdf: "ph-file-pdf"
+      };
+
+      // Folder icons use the Phosphor "fill" weight so they read as solid shapes
+      // against the outlined file glyphs; everything else stays on "regular".
+      const iconFor = (name, type) => {
+        if (type === "dir") return { cls: "ph-folder", weight: "ph-fill", isFolder: true };
+        // Dotfiles (e.g. .zshrc, .gitignore) have no real extension; render them as config glyphs.
+        if (name.startsWith(".")) return { cls: "ph-gear", weight: "ph", isFolder: false };
+        const dot = name.lastIndexOf(".");
+        const ext = dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+        return { cls: ICON_BY_EXT[ext] || "ph-file", weight: "ph", isFolder: false };
+      };
+
+      const CACHE_PREFIX = "cupuacu:";
+      const CACHE_VERSION = "v1";
+      const CACHE_KEY = `${CACHE_PREFIX}${CACHE_VERSION}:${TARGET.owner}/${TARGET.repo}`;
+      const CACHE_MAX_BYTES = 3_000_000;
+
+      // Drop any older-version cache entries we planted in previous deploys so they
+      // don't sit in localStorage forever after a CACHE_VERSION bump.
+      const sweepStaleCache = () => {
+        const currentPrefix = `${CACHE_PREFIX}${CACHE_VERSION}:`;
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(CACHE_PREFIX) && !k.startsWith(currentPrefix)) {
+              localStorage.removeItem(k);
+            }
+          }
+        } catch (err) {
+          console.warn("Cache sweep failed:", err);
+        }
+      };
+      sweepStaleCache();
+
+      const readCache = () => {
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || !parsed.repo || !parsed.tree) return null;
+          return parsed;
+        } catch (err) {
+          // Corrupted entry: drop it so the next write starts clean.
+          console.warn("Cache parse failed:", err);
+          try {
+            localStorage.removeItem(CACHE_KEY);
+          } catch {
+            /* storage may be disabled — nothing to clean */
+          }
+          return null;
+        }
+      };
+
+      const writeCache = entry => {
+        try {
+          const serialized = JSON.stringify(entry);
+          if (serialized.length > CACHE_MAX_BYTES) {
+            console.warn("Cache skipped: payload", serialized.length, "bytes exceeds soft limit of", CACHE_MAX_BYTES);
+            return;
+          }
+          localStorage.setItem(CACHE_KEY, serialized);
+        } catch (err) {
+          console.warn("Cache write failed (quota or storage disabled):", err);
+        }
+      };
+
+      const setCacheLabel = text => {
+        dom.cacheLabel.textContent = text;
+        dom.cacheLabel.hidden = false;
+      };
+
+      const showRateLimitBanner = resetAt => {
+        const when = resetAt ? formatHHMM(resetAt) : "SHORTLY";
+        dom.ratelimit.textContent = `RATE-LIMITED · SHOWING CACHED DATA · RESETS ${when}`;
+        dom.ratelimit.hidden = false;
+      };
+
+      const announceDirectory = path => {
+        const label = path || "root";
+        const count = state.dirIndex?.get(path)?.length || 0;
+        dom.announcer.textContent = `Showing ${count} items in ${label}`;
+      };
+
+      const buildDirIndex = tree => {
+        const map = new Map();
+        // Pre-seed an empty root so repos with no top-level entries (e.g. a
+        // single deeply-nested folder) still render cleanly.
+        map.set("", []);
+        for (const node of tree) {
+          const path = node.path;
+          const lastSlash = path.lastIndexOf("/");
+          const parent = lastSlash === -1 ? "" : path.slice(0, lastSlash);
+          const name = lastSlash === -1 ? path : path.slice(lastSlash + 1);
+          const entry = {
+            name,
+            path,
+            type: node.type === "tree" ? "dir" : "file",
+            size: node.type === "blob" ? node.size : null
+          };
+          if (!map.has(parent)) map.set(parent, []);
+          map.get(parent).push(entry);
+        }
+        for (const list of map.values()) {
+          list.sort((a, b) => {
+            if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        }
+        return map;
+      };
+
+      const makeIcon = ({ cls, weight = "ph", isFolder = false }) => {
+        const i = document.createElement("i");
+        i.className = `${weight} ${cls} nb-icon file-icon${isFolder ? " folder" : ""}`;
+        i.setAttribute("aria-hidden", "true");
+        return i;
+      };
+
+      const makeSpan = (text, className) => {
+        const s = document.createElement("span");
+        if (className) s.className = className;
+        s.textContent = text;
+        return s;
+      };
+
+      const buildParentRow = parentPath => {
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        const a = document.createElement("a");
+        a.href = `#${parentPath}`;
+        a.dataset.path = parentPath;
+        a.dataset.type = "dir";
+        a.setAttribute("aria-label", "Parent directory");
+        a.appendChild(makeIcon({ cls: "ph-arrow-up-left" }));
+        a.appendChild(makeSpan(".."));
+        tdName.appendChild(a);
+        tr.appendChild(tdName);
+
+        const tdSize = document.createElement("td");
+        tdSize.className = "cell-size";
+        tdSize.textContent = "—";
+        tr.appendChild(tdSize);
+        return tr;
+      };
+
+      const buildEmptyRow = () => {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 2;
+        td.className = "cell-empty";
+        td.textContent = "Empty folder";
+        tr.appendChild(td);
+        return tr;
+      };
+
+      const buildRow = entry => {
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        const a = document.createElement("a");
+
+        if (entry.type === "dir") {
+          a.href = `#${entry.path}`;
+        } else {
+          a.href = blobUrl(entry.path);
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        }
+        a.dataset.path = entry.path;
+        a.dataset.type = entry.type;
+
+        a.appendChild(makeIcon(iconFor(entry.name, entry.type)));
+        a.appendChild(makeSpan(entry.name));
+        tdName.appendChild(a);
+        tr.appendChild(tdName);
+
+        const tdSize = document.createElement("td");
+        tdSize.className = "cell-size";
+        tdSize.textContent = formatBytes(entry.size);
+        tr.appendChild(tdSize);
+        return tr;
+      };
+
+      const renderFileList = path => {
+        const rows = state.dirIndex.get(path) || [];
+        // Build in a DocumentFragment so the whole update is one reflow
+        // regardless of row count.
+        const frag = document.createDocumentFragment();
+        if (path !== "") {
+          const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+          frag.appendChild(buildParentRow(parent));
+        }
+        if (rows.length === 0) {
+          frag.appendChild(buildEmptyRow());
+        } else {
+          for (const entry of rows) frag.appendChild(buildRow(entry));
+        }
+        dom.fileList.replaceChildren(frag);
+      };
+
+      const renderDirectoryView = path => {
+        renderBreadcrumbs(path);
+        renderFileList(path);
+      };
+
+      const navigateTo = (path, { push = true } = {}) => {
+        const targetPath = state.dirIndex.has(path) ? path : "";
+        state.currentPath = targetPath;
+        if (push) {
+          const hash = targetPath ? `#${targetPath}` : "#";
+          history.pushState({ path: targetPath }, "", hash);
+        } else if (targetPath !== path) {
+          // Manual URL edit landed on a non-existent folder — normalize the address bar
+          // so it reflects what's actually shown instead of leaving stale `#garbage`.
+          const url = targetPath ? `#${targetPath}` : location.pathname + location.search;
+          history.replaceState({ path: targetPath }, "", url);
+        }
+        renderDirectoryView(targetPath);
+        announceDirectory(targetPath);
+        // Reset viewport and move keyboard focus into the new table — the previously
+        // focused row's anchor was just removed by replaceChildren, which would
+        // otherwise drop focus to <body>.
+        window.scrollTo({ top: 0, behavior: "instant" });
+        const firstLink = dom.fileList.querySelector("a");
+        if (firstLink) firstLink.focus({ preventScroll: true });
+      };
+
+      const renderBreadcrumbs = path => {
+        const ol = dom.breadcrumbs;
+        ol.replaceChildren();
+
+        // Original case in the DOM; CSS `text-transform: uppercase` handles display.
+        // Screen readers then receive natural-case text rather than all-caps (which
+        // some AT spells out letter-by-letter).
+        const rootLi = document.createElement("li");
+        const rootA = document.createElement("a");
+        rootA.href = "#";
+        rootA.dataset.path = "";
+        rootA.textContent = "Root";
+        if (!path) rootA.setAttribute("aria-current", "page");
+        rootLi.appendChild(rootA);
+        ol.appendChild(rootLi);
+
+        if (!path) return;
+
+        let acc = "";
+        const segments = path.split("/");
+        segments.forEach((seg, idx) => {
+          acc = acc ? `${acc}/${seg}` : seg;
+
+          const sep = document.createElement("li");
+          sep.className = "sep";
+          sep.setAttribute("aria-hidden", "true");
+          sep.textContent = "/";
+          ol.appendChild(sep);
+
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.href = `#${acc}`;
+          a.dataset.path = acc;
+          a.textContent = seg;
+          if (idx === segments.length - 1) a.setAttribute("aria-current", "page");
+          li.appendChild(a);
+          ol.appendChild(li);
+        });
+      };
+
+      const renderHero = repo => {
+        if (repo.owner?.avatar_url) dom.avatar.src = repo.owner.avatar_url;
+        dom.avatar.alt = `${repo.owner?.login || ""} avatar`;
+        dom.name.textContent = repo.full_name;
+        dom.description.textContent = repo.description || "No description";
+        dom.stars.querySelector(".badge-count").textContent = `${formatCount(repo.stargazers_count)} STARS`;
+        dom.forks.querySelector(".badge-count").textContent = `${formatCount(repo.forks_count)} FORKS`;
+        // GitHub's `watchers_count` is an alias for `stargazers_count`; the true
+        // watcher metric is `subscribers_count`.
+        dom.watchers.querySelector(".badge-count").textContent = `${formatCount(repo.subscribers_count)} WATCHERS`;
+        dom.link.href = repo.html_url;
+      };
+
+      const handleError = err => {
+        // User-facing messages below are intentionally concise; keep the raw error
+        // in devtools for diagnosing network, CORS, or unexpected status codes.
+        console.error(err);
+        if (err instanceof RateLimitError) {
+          const when = err.resetAt ? `at ${formatHHMM(err.resetAt)}` : "shortly";
+          showError({
+            title: "RATE LIMIT REACHED",
+            message: `GitHub API rate limit exhausted. Resets ${when}.`,
+            showRetry: true
+          });
+        } else if (err instanceof NotFoundError) {
+          showError({
+            title: "REPOSITORY NOT FOUND",
+            message: `Could not find ${TARGET.owner}/${TARGET.repo}. Check the URL.`,
+            showRetry: false
+          });
+        } else if (err instanceof HttpError) {
+          showError({
+            title: "GITHUB ERROR",
+            message: `GitHub returned HTTP ${err.status}. Try again later.`,
+            showRetry: true
+          });
+        } else {
+          showError({
+            title: "COULD NOT REACH GITHUB",
+            message: "Network error. Check your connection and retry.",
+            showRetry: true
+          });
+        }
+      };
+
+      // Shared render path for cold-fetch and cache-warm boot. Revalidation keeps its
+      // fine-grained repo/tree branching so unchanged sections aren't re-rendered.
+      const hydrateUI = hash => {
+        renderHero(state.repo);
+        state.currentPath = state.dirIndex.has(hash) ? hash : "";
+        renderDirectoryView(state.currentPath);
+      };
+
+      const boot = async () => {
+        const ctrl = newAbortController();
+        const cache = readCache();
+
+        if (cache) {
+          // Warm path: render immediately, revalidate in background
+          state.repo = cache.repo;
+          state.tree = cache.tree;
+          state.dirIndex = buildDirIndex(state.tree);
+          hydrateUI(currentHashPath());
+          showView("main");
+          setCacheLabel("CACHED · REVALIDATING…");
+          // Background revalidation. `revalidate` handles all error kinds internally
+          // (rate-limit banner, or silent fallback). The .catch is a double-suppression
+          // safety net that prevents an unhandled-promise-rejection warning if a future
+          // edit to revalidate ever propagates an error — never surface errors to the
+          // user here, since that would hide the cache we just rendered.
+          revalidate(cache, ctrl.signal).catch(() => {});
+          return;
+        }
+
+        // Cold path
+        showView("loader");
+        try {
+          const repoRes = await githubFetch(repoApiPath(), { signal: ctrl.signal });
+          const treeRes = await githubFetch(treePath(repoRes.body.default_branch), { signal: ctrl.signal });
+          if (treeRes.body.truncated) {
+            showError({
+              title: "REPOSITORY TOO LARGE",
+              message:
+                "GitHub truncated the tree response (repo exceeds the recursive endpoint limit). Cannot list files reliably.",
+              showRetry: false
             });
-        }
+            return;
+          }
+          state.repo = repoRes.body;
+          state.tree = treeRes.body.tree;
+          state.dirIndex = buildDirIndex(state.tree);
 
-        async function fetchRepoDetails(owner, repo) {
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-            if (!response.ok) {
-                throw new Error(`Could not fetch repository details. Status: ${response.status}`);
+          writeCache({
+            repo: state.repo,
+            tree: state.tree,
+            etag: { repo: repoRes.etag, tree: treeRes.etag }
+          });
+
+          hydrateUI(currentHashPath());
+          showView("main");
+          setCacheLabel(`UPDATED ${formatHHMM()}`);
+        } catch (err) {
+          if (err?.name === "AbortError") return;
+          handleError(err);
+        }
+      };
+
+      const revalidate = async (cache, signal) => {
+        try {
+          // Warm-path parallelism: we already know default_branch from the cached repo,
+          // so both conditional requests can fire simultaneously.
+          const cachedBranch = cache.repo.default_branch;
+          let [repoRes, treeRes] = await Promise.all([
+            githubFetch(repoApiPath(), { etag: cache.etag?.repo, signal }),
+            githubFetch(treePath(cachedBranch), { etag: cache.etag?.tree, signal })
+          ]);
+
+          // If upstream renamed the default branch, the parallel tree fetch raced the old
+          // name. Refetch against the new branch without an ETag (the old one won't match).
+          if (repoRes.status === 200 && repoRes.body.default_branch !== cachedBranch) {
+            treeRes = await githubFetch(treePath(repoRes.body.default_branch), { signal });
+          }
+
+          const repoChanged = repoRes.status === 200;
+          const treeChanged = treeRes.status === 200;
+
+          if (repoChanged) state.repo = repoRes.body;
+          if (treeChanged) {
+            if (treeRes.body.truncated) {
+              // Revalidation now sees a truncated tree — keep the cached view but warn via banner.
+              setCacheLabel("CACHED · UPSTREAM TRUNCATED");
+              return;
             }
-            const data = await response.json();
-            displayRepoDetails(data);
-        }
-
-        async function fetchAndDisplayContents(owner, repo, path) {
-            try {
-                hideError();
-                fileList.innerHTML = '<tr><td colspan="4" class="p-4 text-center"><i class="fas fa-spinner icon-spin text-2xl text-indigo-400"></i></td></tr>';
-
-                const contentsResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`);
-                if (!contentsResponse.ok) {
-                    throw new Error(`Could not fetch contents. Status: ${contentsResponse.status}`);
-                }
-                const contents = await contentsResponse.json();
-                
-                displayContents(contents);
-                updateBreadcrumbs(path);
-                repoContainer.classList.remove('hidden');
-            } catch (err) {
-                showError(`Failed to load directory: ${err.message}`);
-                repoContainer.classList.add('hidden');
-            } finally {
-                loader.classList.add('hidden');
+            state.tree = treeRes.body.tree;
+            state.dirIndex = buildDirIndex(state.tree);
+            // If the user's current path disappeared after rebuild, fall back to root.
+            // Also rewrite the address bar so the back button stays consistent.
+            if (!state.dirIndex.has(state.currentPath)) {
+              state.currentPath = "";
+              history.replaceState({ path: "" }, "", location.pathname + location.search);
             }
-        }
+          }
 
-        async function fetchLastCommitForItem(owner, repo, itemPath) {
-            if (commitCache[itemPath]) {
-                return commitCache[itemPath];
+          writeCache({
+            repo: state.repo,
+            tree: state.tree,
+            etag: {
+              repo: repoChanged ? repoRes.etag : cache.etag?.repo,
+              tree: treeChanged ? treeRes.etag : cache.etag?.tree
             }
+          });
 
-            try {
-                const commitsResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(itemPath)}&per_page=1`);
-                if (!commitsResponse.ok) {
-                    throw new Error(`Status: ${commitsResponse.status}`);
-                }
-                const commits = await commitsResponse.json();
-                if (commits.length > 0) {
-                    const latestCommit = {
-                        message: commits[0].commit.message.split('\n')[0],
-                        date: new Date(commits[0].commit.committer.date)
-                    };
-                    commitCache[itemPath] = latestCommit;
-                    return latestCommit;
-                }
-            } catch (error) {
-                console.error(`Could not fetch commit for path: ${itemPath}`, error);
-            }
-            // Return a default value if fetch fails or no commits are found
-            const failedCommit = { message: 'Failed to load commit', date: new Date(0) };
-            commitCache[itemPath] = failedCommit;
-            return failedCommit;
+          if (repoChanged) renderHero(state.repo);
+          if (treeChanged) renderDirectoryView(state.currentPath);
+          setCacheLabel(`UPDATED ${formatHHMM()}`);
+        } catch (err) {
+          if (err?.name === "AbortError") return;
+          if (err instanceof RateLimitError) {
+            showRateLimitBanner(err.resetAt);
+            setCacheLabel("CACHED · API RATE-LIMITED");
+            return;
+          }
+          // Any other revalidation error: stay on cached content silently.
         }
+      };
 
+      dom.errorRetry.addEventListener("click", boot);
+      boot();
 
-        // --- Display and UI Functions ---
-        
-        function displayRepoDetails(data) {
-            document.getElementById('repoOwnerAvatar').src = data.owner.avatar_url;
-            document.getElementById('repoName').textContent = data.full_name;
-            document.getElementById('repoDescription').textContent = data.description || 'No description provided.';
-            document.getElementById('repoStars').innerHTML = `<i class="fas fa-star mr-1 text-yellow-400"></i> ${data.stargazers_count.toLocaleString()} Stars`;
-            document.getElementById('repoForks').innerHTML = `<i class="fas fa-code-branch mr-1 text-green-400"></i> ${data.forks_count.toLocaleString()} Forks`;
-            document.getElementById('repoWatchers').innerHTML = `<i class="fas fa-eye mr-1 text-blue-400"></i> ${data.watchers_count.toLocaleString()} Watchers`;
-            document.getElementById('repoLink').href = data.html_url;
-        }
+      // Intercept folder/breadcrumb anchor clicks; let file links use native target=_blank,
+      // and preserve the OS convention of meta/ctrl/middle-click to open in a new tab.
+      document.addEventListener("click", e => {
+        if (!state.dirIndex) return;
+        const a = e.target.closest("a[data-path]");
+        if (!a) return;
+        if (a.dataset.type === "file") return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        navigateTo(a.dataset.path);
+      });
 
-        function displayContents(contents) {
-            fileList.innerHTML = '';
-            
-            contents.sort((a, b) => {
-                if (a.type === b.type) {
-                    return a.name.localeCompare(b.name);
-                }
-                return a.type === 'dir' ? -1 : 1;
-            });
-            
-            if (currentPath !== '') {
-                 fileList.appendChild(createParentDirectoryRow());
-            }
-
-            if (contents.length === 0) {
-                const colspan = window.innerWidth < 768 ? 2 : 4;
-                const row = document.createElement('tr');
-                row.innerHTML = `<td colspan="${colspan}" class="p-4 text-center text-slate-500">This directory is empty.</td>`;
-                fileList.appendChild(row);
-                return;
-            }
-
-            contents.forEach(item => {
-                if (item?.name == "index.html" || item?.name == "index.htm") return;
-                const row = document.createElement('tr');
-                row.className = 'border-t border-slate-700/50 hover:bg-slate-700/30 transition-colors duration-200';
-                
-                const nameCell = createNameCell(item);
-                const commitCell = createCommitCell(); // Placeholder
-                const dateCell = createDateCell(); // Placeholder
-                const sizeCell = createSizeCell(item);
-
-                row.appendChild(nameCell);
-                row.appendChild(commitCell);
-                row.appendChild(dateCell);
-                row.appendChild(sizeCell);
-                fileList.appendChild(row);
-
-                // Asynchronously fetch and populate commit data
-                fetchLastCommitForItem(currentOwner, currentRepo, item.path).then(commitInfo => {
-                    commitCell.innerHTML = `<div class="truncate" title="${commitInfo.message}">${commitInfo.message}</div>`;
-                    dateCell.textContent = commitInfo.date.getTime() === 0 ? 'N/A' : commitInfo.date.toLocaleDateString("en-IN",{ month: '2-digit', day: '2-digit', year: '2-digit' });
-                });
-            });
-        }
-        
-        function createParentDirectoryRow() {
-            const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-            const row = document.createElement('tr');
-            row.className = 'border-t border-slate-700/50 hover:bg-slate-700/30 transition-colors duration-200 cursor-pointer';
-            row.onclick = () => {
-                currentPath = parentPath;
-                fetchAndDisplayContents(currentOwner, currentRepo, parentPath);
-            };
-            const colspan = window.innerWidth < 768 ? '1' : '3';
-            row.innerHTML = `
-                <td class="p-4 text-slate-300 flex items-center">
-                    <i class="fas fa-level-up-alt w-6 mr-3 text-slate-500"></i>
-                    ..
-                </td>
-                <td colspan="${colspan}"></td>
-            `;
-            return row;
-        }
-
-        function createNameCell(item) {
-            const cell = document.createElement('td');
-            cell.className = 'p-4 text-slate-300';
-            
-            const icon = getFileIcon(item);
-            const link = document.createElement('a');
-            link.href = '#';
-            link.className = 'flex items-center hover:text-indigo-400';
-            link.innerHTML = `${icon} <span class="truncate">${item.name}</span>`;
-            
-            if (item.type === 'dir') {
-                link.onclick = (e) => {
-                    e.preventDefault();
-                    currentPath = item.path;
-                    fetchAndDisplayContents(currentOwner, currentRepo, item.path);
-                };
-            } else if (item.type === 'file') {
-                link.href = item.path;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.onclick = (e) => e.stopPropagation();
-            }
-            
-            cell.appendChild(link);
-            return cell;
-        }
-
-        function createCommitCell() {
-            const cell = document.createElement('td');
-            cell.className = 'p-4 text-slate-400 text-sm hidden sm:table-cell';
-            cell.innerHTML = `<div class="truncate text-slate-500">Loading...</div>`;
-            return cell;
-        }
-
-        function createDateCell() {
-             const cell = document.createElement('td');
-             cell.className = 'p-4 text-slate-500 text-sm hidden md:table-cell';
-             return cell;
-        }
-        
-        function createSizeCell(item) {
-            const cell = document.createElement('td');
-            cell.className = 'p-4 text-slate-400 text-right';
-            cell.textContent = item.type === 'file' ? formatBytes(item.size) : '--';
-            return cell;
-        }
-
-        function updateBreadcrumbs(path) {
-            breadcrumbs.innerHTML = '';
-            const rootLink = document.createElement('a');
-            rootLink.href = '#';
-            rootLink.className = 'hover:text-indigo-400';
-            rootLink.textContent = 'root';
-            rootLink.onclick = (e) => {
-                e.preventDefault();
-                currentPath = '';
-                fetchAndDisplayContents(currentOwner, currentRepo, '');
-            };
-            breadcrumbs.appendChild(rootLink);
-
-            if (!path) return;
-
-            const parts = path.split('/');
-            let currentCrumbPath = '';
-            parts.forEach(part => {
-                currentCrumbPath += (currentCrumbPath ? '/' : '') + part;
-                const separator = document.createElement('span');
-                separator.className = 'mx-2 text-slate-600';
-                separator.textContent = '/';
-                breadcrumbs.appendChild(separator);
-
-                const partLink = document.createElement('a');
-                partLink.href = '#';
-                partLink.className = 'hover:text-indigo-400';
-                partLink.textContent = part;
-                
-                const pathForOnClick = currentCrumbPath;
-                partLink.onclick = (e) => {
-                    e.preventDefault();
-                    currentPath = pathForOnClick;
-                    fetchAndDisplayContents(currentOwner, currentRepo, pathForOnClick);
-                };
-                breadcrumbs.appendChild(partLink);
-            });
-        }
-        
-        function showError(message) {
-            repoContainer.classList.add('hidden');
-            loader.classList.add('hidden');
-            errorMessage.textContent = message;
-            errorContainer.classList.remove('hidden');
-        }
-
-        function hideError() {
-            errorContainer.classList.add('hidden');
-        }
-
-        // --- Utility Functions ---
-
-        function formatBytes(bytes, decimals = 2) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
-
-        function getFileIcon(item) {
-            const baseClass = "w-6 mr-3 text-center";
-            if (item.type === 'dir') {
-                return `<i class="fas fa-folder ${baseClass} text-indigo-400"></i>`;
-            }
-            
-            const extension = item.name.split('.').pop().toLowerCase();
-            const iconMap = {
-                'js': 'fa-brands fa-js-square text-yellow-400',
-                'html': 'fa-brands fa-html5 text-orange-500',
-                'css': 'fa-brands fa-css3-alt text-blue-500',
-                'py': 'fa-brands fa-python text-blue-400',
-                'java': 'fa-brands fa-java text-red-500',
-                'md': 'fa-brands fa-markdown text-slate-400',
-                'json': 'fas fa-file-code text-green-400',
-                'png': 'fas fa-file-image text-purple-400',
-                'jpg': 'fas fa-file-image text-purple-400',
-                'jpeg': 'fas fa-file-image text-purple-400',
-                'gif': 'fas fa-file-image text-purple-400',
-                'svg': 'fas fa-file-image text-purple-400',
-                'zip': 'fas fa-file-archive text-yellow-600',
-                'rar': 'fas fa-file-archive text-yellow-600',
-                'gz': 'fas fa-file-archive text-yellow-600',
-                'pdf': 'fas fa-file-pdf text-red-600',
-                'txt': 'fas fa-file-alt text-slate-400',
-                'gitignore': 'fa-brands fa-git-alt text-orange-600',
-                'dockerfile': 'fa-brands fa-docker text-blue-500',
-            };
-            
-            const iconClass = iconMap[extension] || 'fas fa-file-alt text-slate-500';
-            return `<i class="${iconClass} ${baseClass}"></i>`;
-        }
-
+      // popstate covers back/forward; hashchange covers manual URL-bar edits.
+      // Both events can fire on the same back/forward, so we dedup by comparing
+      // the target path to state.currentPath before re-rendering.
+      const onHashNavigation = () => {
+        if (!state.dirIndex) return;
+        const hashPath = currentHashPath();
+        if (hashPath === state.currentPath) return;
+        navigateTo(hashPath, { push: false });
+      };
+      window.addEventListener("popstate", onHashNavigation);
+      window.addEventListener("hashchange", onHashNavigation);
     </script>
-</body>
+  </body>
 </html>
