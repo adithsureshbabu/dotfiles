@@ -7,3 +7,5 @@ by André Berg, by way of romkatv's [MesloLGS NF](https://github.com/romkatv/pow
 
 Changed: Nerd Fonts 3.5.1 icons, at romkatv's size and position (each icon set under its own license, see
 [Nerd Fonts' LICENSE](https://github.com/ryanoasis/nerd-fonts/blob/master/LICENSE)), and a single-storey lowercase `a`.
+
+The `.woff2` files are the same fonts repackaged, with identical glyph data and hinting.
